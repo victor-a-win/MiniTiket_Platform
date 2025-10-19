@@ -1,0 +1,27 @@
+@import url('https://fonts.googleapis.com/css2?family=Libre+Bodoni:ital,wght@0,400..700;1,400..700&display=swap');
+
+.Footer-Styles {
+    font-family: "Libre Bodoni", serif;
+    margin-bottom: auto;
+    margin-top: auto;
+}
+
+.Back-to-HomePage:hover{
+    background-color: #FB8500;
+    border-width: 2px;
+    border-color: #219EBC;
+}
+.Back-to-HomePage:active {
+    background-color: #FFB703;
+    border-width: 5px;
+    border-color: #8ECAE6;
+}
+
+.Footer-Botton-Styles{
+    font-weight: 700;
+    color: white
+}
+
+.License-Caption-Styles{
+    color: white
+}

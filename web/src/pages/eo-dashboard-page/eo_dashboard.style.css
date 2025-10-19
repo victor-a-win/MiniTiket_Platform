@@ -1,0 +1,27 @@
+@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Baskervville:ital@0;1&family=Libre+Bodoni:ital,wght@0,400..700;1,400..700&display=swap');
+
+.EO-Dashboard-Styles{
+    background-color: white;
+}
+
+h1{
+    font-family: "Baskervville", serif;
+    color: #023047;
+}
+
+h2{
+    font-family: "EB Garamond", serif;
+    color: #FB8500;
+}
+
+h3{
+    font-family: "EB Garamond", serif;
+    color: #FFB703;
+}
+
+
+p{
+    font-family: "Libre Bodoni", serif;
+    color: #023047;
+}

@@ -1,0 +1,56 @@
+.NavBar-Styles {
+    border-top: 3px solid #219EBC;
+    border-bottom: 3px solid #219EBC;
+    font-family: Georgia, 'Times New Roman', Times, serif;
+    color: white;
+
+    img:hover {
+        box-shadow: 0 0 4px 4px rgba(0, 140, 186, 0.5);
+    }
+}
+
+.EO-Button-Stlyes {
+    transition: all 0.3s ease-in-out;
+
+    &:hover {
+        color: #219EBC;
+    }
+
+    &:active {
+        color: #8ECAE6;
+        cursor: pointer;
+    }
+}
+
+.Nav-Button-Stlyes {
+    transition: all 0.3s ease-in-out;
+
+    &:hover {
+        border: #FB8500 2px solid;
+        background-color: #023047;
+        border-radius: 15px 50px 30px;
+        color: #219EBC;
+    }
+
+    &:active {
+        color: #8ECAE6;
+    }
+}
+
+.Auth-Button-Styles {
+    background-color: #023047;
+    transition: all 0.3s ease-in-out;
+    border-radius: 25px;
+
+    &:hover {
+        border: #FB8500 2px solid;
+        background-color: #023047;
+        border-radius: 15px 50px 30px;
+        color: #219EBC;
+    }
+
+    &:active {
+        color: #8ECAE6;
+        cursor: pointer;
+    }
+}
