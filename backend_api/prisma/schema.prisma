@@ -9,23 +9,73 @@ datasource db {
 }
 
 model Event {
-  id          String        @id @default(uuid())
-  name        String
-  location    String
-  start_date  DateTime
-  end_date    DateTime
-  seats       Int
-  organizer   String
-  price       Float
-  description String
-  created_at  DateTime      @default(now())
-  category    String
-  user_id     Int
-  image_url   String?
-  user        Users         @relation(fields: [user_id], references: [id])
+  id             String           @id @default(cuid())
+  organizerId    String
+  organizer      OrganizerProfile @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  userId         Int?
+  user           Users?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title          String
+  description    String?
+  category       String?
+  location       String
+  startAt        DateTime
+  endAt          DateTime
+  isPaid         Boolean          @default(false)
+  capacity       Int
+  seatsAvailable Int
+
+  ticketTypes TicketType[]
+  promotions  Promotion[]
+  tickets     Ticket[]
   reviews     Review[]
   Transaction Transaction[]
-  vouchers    Voucher[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  Voucher   Voucher[]
+
+  @@index([startAt])
+  @@index([category])
+  @@index([location])
+}
+
+model TicketType {
+  id              String            @id @default(cuid())
+  eventId         String
+  event           Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name            String
+  priceIDR        Int
+  quota           Int?
+  createdAt       DateTime          @default(now())
+  TransactionItem TransactionItem[]
+  Ticket          Ticket[]
+}
+
+model Promotion {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  code        String
+  type        String // "PERCENT" | "FLAT"
+  value       Int
+  minSpendIDR Int      @default(0)
+  startsAt    DateTime
+  endsAt      DateTime
+  maxUses     Int?
+  usedCount   Int      @default(0)
+
+  @@unique([eventId, code])
+}
+
+model OrganizerProfile {
+  id           String  @id @default(cuid())
+  userId       Int     @unique
+  user         Users   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName  String
+  bio          String?
+  events       Event[]
+  ratingsAvg   Float   @default(0)
+  ratingsCount Int     @default(0)
 }
 
 model Voucher {
@@ -38,19 +88,20 @@ model Voucher {
   max_usage     Int
   current_usage Int
   event         Event    @relation(fields: [event_id], references: [id])
+  is_active     Boolean  @default(true)
 }
 
 model Review {
-  id         String   @id @default(uuid())
-  event_id   String
-  message    String
-  rating     Int
-  created_at DateTime @default(now())
-  user_id    Int
-  event      Event    @relation(fields: [event_id], references: [id])
-  user       Users    @relation(fields: [user_id], references: [id])
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      Users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
 
-  @@unique([user_id, event_id])
+  @@unique([eventId, userId])
 }
 
 model Coupon {
@@ -92,6 +143,7 @@ model Users {
   referralsReceived   Referral?            @relation("ReferralsReceived")
   referredUser        Users?               @relation("UserReferrals", fields: [referred_by], references: [id])
   referredUsers       Users[]              @relation("UserReferrals")
+  organizerProfile    OrganizerProfile?
   role                Role                 @relation(fields: [roleId], references: [id])
 
   @@index([referred_by])
@@ -100,22 +152,53 @@ model Users {
 
 // schema.prisma
 model Transaction {
-  id             String            @id @default(uuid())
-  total_amount   Float
-  payment_method String?
-  status         TransactionStatus @default(waiting_for_payment)
-  user_id        Int
-  event_id       String
-  created_at     DateTime          @default(now())
-  expired_at     DateTime?
-  quantity       Int
-  payment_date   DateTime?
-  payment_proof  String? // Tambah ini untuk menyimpan URL bukti pembayaran
-  point_used     Int?              @default(0)
-  coupon_code    String?
-  voucher_code   String?
-  event          Event             @relation(fields: [event_id], references: [id])
-  user           Users             @relation(fields: [user_id], references: [id])
+  id               String            @id @default(cuid())
+  userId           Int
+  user             Users             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventId          String
+  event            Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  status           TxStatus          @default(WAITING_PAYMENT)
+  totalBeforeIDR   Int
+  pointsUsedIDR    Int               @default(0)
+  promoCode        String?
+  promoDiscountIDR Int               @default(0)
+  totalPayableIDR  Int
+  paymentProofUrl  String?
+  paymentProofAt   DateTime?
+  expiresAt        DateTime // createdAt + 2h
+  decisionDueAt    DateTime? // paymentProofAt + 3d
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  items            TransactionItem[]
+  tickets          Ticket[]
+
+  @@index([status])
+  @@index([expiresAt])
+  @@index([decisionDueAt])
+}
+
+model TransactionItem {
+  id            String      @id @default(cuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  ticketTypeId  String?
+  ticketType    TicketType? @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+  qty           Int
+  unitPriceIDR  Int
+  lineTotalIDR  Int
+}
+
+model Ticket {
+  id            String      @id @default(cuid())
+  eventId       String
+  event         Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  ticketTypeId  String?
+  ticketType    TicketType? @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+  ownerUserId   String?
+  checkedInAt   DateTime?
+  createdAt     DateTime    @default(now())
 }
 
 model PointTransactions {
@@ -166,14 +249,13 @@ model PasswordResetToken {
   user      Users    @relation(fields: [userId], references: [id])
 }
 
-enum TransactionStatus {
-  waiting_for_payment
-  waiting_for_admin
-  confirmation
-  done
-  rejected
-  expired
-  canceled
+enum TxStatus {
+  WAITING_PAYMENT
+  WAITING_CONFIRMATION
+  DONE
+  REJECTED
+  EXPIRED
+  CANCELED
 }
 
 enum RefferalStatus {
