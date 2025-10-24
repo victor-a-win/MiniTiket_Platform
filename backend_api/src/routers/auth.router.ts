@@ -10,6 +10,7 @@ import {
   AuthPasswordController,
   VerifyResetTokenController,
   getCurrentUserController,
+  ResetPasswordLoggedInController,
 } from "../controllers/auth.controller";
 
 import { VerifyToken, EOGuard } from "../middlewares/auth.middleware";
@@ -63,6 +64,12 @@ router.post(
 router.post("/reset-password", AuthPasswordController.resetPassword);
 
 router.post("/verify-reset-token", VerifyResetTokenController);
+
+router.post(
+  "/reset-password-loggedin",
+  VerifyToken,
+  ResetPasswordLoggedInController
+);
 
 // exporting the router to be used in index.ts
 export default router;

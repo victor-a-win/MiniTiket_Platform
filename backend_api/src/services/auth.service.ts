@@ -505,6 +505,42 @@ async function verifyResetTokenService(token: string) {
   }
 }
 
+async function resetPasswordLoggedInService(
+  userId: number,
+  newPassword: string
+): Promise<void> {
+  // Find user
+  const user = await prisma.users.findUnique({
+    where: { id: userId },
+  });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  // Validate new password
+  if (newPassword.length < 8) {
+    throw new Error("Password must be at least 8 characters long");
+  }
+
+  const passwordRegex =
+    /^(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.*[^a-zA-Z0-9]).{8,}$/;
+  if (!passwordRegex.test(newPassword)) {
+    throw new Error(
+      "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character"
+    );
+  }
+
+  // Hash new password
+  const hashedPassword = await passwordService.hashPassword(newPassword);
+
+  // Update user password
+  await prisma.users.update({
+    where: { id: userId },
+    data: { password: hashedPassword },
+  });
+}
+
 // Exporting the functions to be used in controllers directory
 export {
   FindUserByEmail,
@@ -516,4 +552,5 @@ export {
   // UpdateUserService2,
   VerifyUserService,
   verifyResetTokenService,
+  resetPasswordLoggedInService,
 };
