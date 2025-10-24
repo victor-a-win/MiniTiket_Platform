@@ -1,6 +1,7 @@
 "use client";
 
 import ChangePasswordForm from "../../components/profile/changepasswordform";
+import ResetPasswordForm from "@/components/profile/resetpasswordForm";
 import { useEffect } from "react";
 import ProfilePictureUpload from "@/components/profile/profilepictureupload";
 import { useAppSelector, useAppDispatch } from "@/lib/redux/hook";
@@ -125,6 +126,7 @@ export default function Profile() {
                                         </p>
                                     )}
                             </div>
+                     <ResetPasswordForm />
 
                         </div>
                     </div>
