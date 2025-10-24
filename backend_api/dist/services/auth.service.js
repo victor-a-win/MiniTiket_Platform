@@ -21,6 +21,7 @@ exports.LoginService = LoginService;
 exports.UpdateUserService = UpdateUserService;
 exports.VerifyUserService = VerifyUserService;
 exports.verifyResetTokenService = verifyResetTokenService;
+exports.resetPasswordLoggedInService = resetPasswordLoggedInService;
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const bcrypt_1 = require("bcrypt");
 const cloudinary_1 = require("../utils/cloudinary");
@@ -74,8 +75,8 @@ function FindUserByEmail(email) {
                             id: true,
                             amount: true,
                             expiry_date: true,
-                            CreatedAt: true
-                        }
+                            CreatedAt: true,
+                        },
                     },
                 },
                 where: {
@@ -105,9 +106,9 @@ function RegisterService(param) {
             const salt = (0, bcrypt_1.genSaltSync)(10);
             const hashedPassword = yield (0, bcrypt_1.hash)(param.password, salt);
             // insert into user table in prisma database
-            // (first_name, last_name, email, password, is_verified, etc) 
+            // (first_name, last_name, email, password, is_verified, etc)
             return yield prisma_1.default.$transaction((tx) => __awaiter(this, void 0, void 0, function* () {
-                // Check if referral code exists if provided. 
+                // Check if referral code exists if provided.
                 // User can provide a referral code when account registering or leave it empty
                 let referringUserId = null;
                 // 2. Create user - changed referred_by to use number directly
@@ -125,39 +126,52 @@ function RegisterService(param) {
                         referral_code: `TIX-${Date.now().toString(36)}`,
                     },
                 });
-                // 1. Check referral code 
+                // If user is registering as an organizer (roleId = 2), create organizer profile
+                if (param.roleId === 2) {
+                    yield tx.organizerProfile.create({
+                        data: {
+                            userId: user.id,
+                            displayName: `${param.first_name} ${param.last_name}`,
+                            bio: null,
+                            ratingsAvg: 0,
+                            ratingsCount: 0,
+                        },
+                    });
+                    console.log(`Organizer profile created for user: ${user.id}`);
+                }
+                // 1. Check referral code
                 // If referral code is provided, find the user with that code
                 if (param.referred_by) {
                     const referringUser = yield tx.users.findUnique({
                         where: {
                             referral_code: param.referred_by,
                             // Prevent self-referral
-                            NOT: { id: user.id }
-                        }
+                            NOT: { id: user.id },
+                        },
                     });
                     if (!referringUser)
-                        throw new Error('Invalid referral code');
+                        throw new Error("Invalid referral code");
                     referringUserId = referringUser.id;
                     // Update the user with the valid referred_by
                     yield tx.users.update({
                         where: { id: user.id },
-                        data: { referred_by: referringUserId }
+                        data: { referred_by: referringUserId },
                     });
                 }
                 // Check if the referring user exists in the database
                 const referringUserExists = yield prisma_1.default.users.findUnique({
-                    where: { referral_code: param.referred_by }
+                    where: { referral_code: param.referred_by },
                 });
-                console.log('Referring user exists:', referringUserExists);
+                console.log("Referring user exists:", referringUserExists);
                 // ensure the referral code is valid and not empty
-                console.log('Attempting to use referral code:', param.referred_by);
+                console.log("Attempting to use referral code:", param.referred_by);
                 // Additional Validation referred_by
                 if (param.referred_by) {
                     const codeValid = yield prisma_1.default.users.count({
-                        where: { referral_code: param.referred_by }
+                        where: { referral_code: param.referred_by },
                     });
                     if (codeValid === 0) {
-                        throw new Error('The referral code does not exist');
+                        throw new Error("The referral code does not exist");
                     }
                 }
                 // 3. Process referral rewards if applicable
@@ -166,7 +180,7 @@ function RegisterService(param) {
                         yield (0, referralrewards_services_1.processReferralRewards)(tx, user.id, referringUserId, user.email);
                     }
                     catch (referralError) {
-                        console.error('Referral reward processing failed:', referralError);
+                        console.error("Referral reward processing failed:", referralError);
                         // Continue registration even if rewards fail
                     }
                 }
@@ -179,12 +193,12 @@ function RegisterService(param) {
                 return user;
             }), {
                 maxWait: 30000, // Maximum time to wait for the transaction (20 seconds)
-                timeout: 20000 // Maximum time the transaction can run (15 seconds)
+                timeout: 20000, // Maximum time the transaction can run (15 seconds)
             });
         }
         catch (error) {
-            console.error('Registration error:', error);
-            throw new Error(`Registration failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            console.error("Registration error:", error);
+            throw new Error(`Registration failed: ${error instanceof Error ? error.message : "Unknown error"}`);
         }
     });
 }
@@ -196,12 +210,12 @@ function ActivateUserService(token) {
             // Verify the JWT token
             const decoded = (0, jsonwebtoken_1.verify)(token, String(config_1.SECRET_KEY));
             // Reject if this is a password reset token
-            if (decoded.type === 'password_reset') {
+            if (decoded.type === "password_reset") {
                 throw new Error("Invalid activation token");
             }
             // First, check if user exists
             const user = yield prisma_1.default.users.findUnique({
-                where: { email: decoded.email }
+                where: { email: decoded.email },
             });
             if (!user) {
                 throw new Error("User not found");
@@ -211,22 +225,22 @@ function ActivateUserService(token) {
                 return {
                     success: true,
                     message: "Account was already verified",
-                    user
+                    user,
                 };
             }
             // Update the user's verification status
             const updatedUser = yield prisma_1.default.users.update({
                 where: {
-                    email: decoded.email
+                    email: decoded.email,
                 },
                 data: {
-                    is_verified: true
-                }
+                    is_verified: true,
+                },
             });
             return {
                 success: true,
                 message: "Account successfully activated",
-                user: updatedUser
+                user: updatedUser,
             };
         }
         catch (err) {
@@ -251,6 +265,27 @@ function LoginService(param) {
             const checkPass = yield (0, bcrypt_1.compare)(param.password, users.password);
             if (!checkPass)
                 throw new Error("Incorrect password");
+            // ========== ADD ORGANIZER PROFILE CHECK/CREATION HERE ==========
+            // If user is an organizer but doesn't have an organizer profile, create one
+            if (users.role.name.toLowerCase() === "event organizer") {
+                const existingOrganizerProfile = yield prisma_1.default.organizerProfile.findUnique({
+                    where: { userId: users.id },
+                });
+                if (!existingOrganizerProfile) {
+                    // Create organizer profile if missing
+                    yield prisma_1.default.organizerProfile.create({
+                        data: {
+                            userId: users.id,
+                            displayName: `${users.first_name} ${users.last_name}`,
+                            bio: null,
+                            ratingsAvg: 0,
+                            ratingsCount: 0,
+                        },
+                    });
+                    console.log(`Auto-created organizer profile for user: ${users.id}`);
+                }
+            }
+            // ========== END ORGANIZER PROFILE CHECK ==========
             // payload is the data that will be included in the JWT token
             const payload = {
                 id: users.id,
@@ -263,7 +298,7 @@ function LoginService(param) {
                 user_points: users.user_points,
                 expiry_points: users.expiry_points,
                 discount_coupons: users.discount_coupons || [],
-                PointTransactions: users.PointTransactions
+                PointTransactions: users.PointTransactions,
             };
             // sign is used to create a JWT token with the user's informatio
             // The token is signed with a secret key and has an expiration time of 1 hour
@@ -288,15 +323,15 @@ function UpdateUserService(file, email) {
             }
             const splitUrl = secure_url.split("/");
             // splitUrl.length - 1 to get the last part of the URL
-            const fileName = splitUrl.slice(-2).join('/');
+            const fileName = splitUrl.slice(-2).join("/");
             const result = yield prisma_1.default.$transaction((t) => __awaiter(this, void 0, void 0, function* () {
                 // where is used to find the user by email and update the profile_picture field with the fileName
                 yield t.users.update({
                     where: {
-                        email: email
+                        email: email,
                     },
                     data: {
-                        profile_picture: fileName
+                        profile_picture: fileName,
                     },
                 });
                 return secure_url; // Return the full URL for the controller to process
@@ -333,7 +368,7 @@ function VerifyUserService() {
             yield prisma_1.default.$transaction((t) => __awaiter(this, void 0, void 0, function* () {
                 yield t.users.updateMany({
                     where: {
-                        is_verified: false
+                        is_verified: false,
                     },
                     data: {
                         is_verified: true,
@@ -353,19 +388,19 @@ class UserPasswordService {
         return __awaiter(this, void 0, void 0, function* () {
             const user = yield prisma_1.default.users.findUnique({
                 where: { id: userId },
-                select: { password: true }
+                select: { password: true },
             });
             if (!user) {
-                throw new Error('User not found');
+                throw new Error("User not found");
             }
             const isMatch = yield passwordService.comparePasswords(currentPassword, user.password);
             if (!isMatch) {
-                throw new Error('Current password is incorrect');
+                throw new Error("Current password is incorrect");
             }
             const hashedPassword = yield passwordService.hashPassword(newPassword);
             yield prisma_1.default.users.update({
                 where: { id: userId },
-                data: { password: hashedPassword }
+                data: { password: hashedPassword },
             });
         });
     }
@@ -373,7 +408,7 @@ class UserPasswordService {
         return __awaiter(this, void 0, void 0, function* () {
             const user = yield prisma_1.default.users.findUnique({
                 where: { email },
-                select: { id: true, email: true }
+                select: { id: true, email: true },
             });
             if (!user) {
                 // Don't reveal whether user exists for security
@@ -390,11 +425,11 @@ class UserPasswordService {
             yield prisma_1.default.$transaction([
                 prisma_1.default.users.update({
                     where: { id: userId },
-                    data: { password: hashedPassword }
+                    data: { password: hashedPassword },
                 }),
                 prisma_1.default.passwordResetToken.deleteMany({
-                    where: { userId }
-                })
+                    where: { userId },
+                }),
             ]);
         });
     }
@@ -412,8 +447,8 @@ function verifyResetTokenService(token) {
             const resetToken = yield prisma_1.default.passwordResetToken.findFirst({
                 where: {
                     token,
-                    expiresAt: { gt: new Date() }
-                }
+                    expiresAt: { gt: new Date() },
+                },
             });
             if (!resetToken) {
                 throw new Error("Invalid or expired token");
@@ -429,5 +464,31 @@ function verifyResetTokenService(token) {
             }
             throw err; // Re-throw other errors
         }
+    });
+}
+function resetPasswordLoggedInService(userId, newPassword) {
+    return __awaiter(this, void 0, void 0, function* () {
+        // Find user
+        const user = yield prisma_1.default.users.findUnique({
+            where: { id: userId },
+        });
+        if (!user) {
+            throw new Error("User not found");
+        }
+        // Validate new password
+        if (newPassword.length < 8) {
+            throw new Error("Password must be at least 8 characters long");
+        }
+        const passwordRegex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.*[^a-zA-Z0-9]).{8,}$/;
+        if (!passwordRegex.test(newPassword)) {
+            throw new Error("Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character");
+        }
+        // Hash new password
+        const hashedPassword = yield passwordService.hashPassword(newPassword);
+        // Update user password
+        yield prisma_1.default.users.update({
+            where: { id: userId },
+            data: { password: hashedPassword },
+        });
     });
 }

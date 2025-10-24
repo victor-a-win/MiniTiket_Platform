@@ -18,6 +18,7 @@ exports.GetAllController = GetAllController;
 exports.UpdateProfileController = UpdateProfileController;
 exports.getCurrentUserController = getCurrentUserController;
 exports.VerifyResetTokenController = VerifyResetTokenController;
+exports.ResetPasswordLoggedInController = ResetPasswordLoggedInController;
 const auth_service_1 = require("../services/auth.service");
 const jsonwebtoken_1 = require("jsonwebtoken");
 // RegisterController function to handle user registration
@@ -29,7 +30,7 @@ function RegisterController(req, res, next) {
             // Validate the request body using the IRegisterParam interface
             // This ensures that the request body contains the required fields for registration
             const data = yield (0, auth_service_1.RegisterService)(req.body);
-            const roleId = typeof req.body.roleId === 'string'
+            const roleId = typeof req.body.roleId === "string"
                 ? parseInt(req.body.roleId)
                 : req.body.roleId;
             // Validate roleId is 1 or 2
@@ -38,7 +39,7 @@ function RegisterController(req, res, next) {
             }
             res.status(200).send({
                 message: "Register Successfully",
-                data
+                data,
             });
         }
         catch (err) {
@@ -69,11 +70,11 @@ function LoginController(req, res, next) {
             const data = yield (0, auth_service_1.LoginService)(req.body);
             const { user, token } = data; // Extract user and token from data
             // Set secure, httpOnly cookie
-            res.cookie('access_token', token, {
+            res.cookie("access_token", token, {
                 httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax',
-                maxAge: 60 * 60 * 24 * 7 * 1000 // 1 week
+                secure: process.env.NODE_ENV === "production",
+                sameSite: "lax",
+                maxAge: 60 * 60 * 24 * 7 * 1000, // 1 week
             });
             res.status(200).json({
                 message: "Login successful",
@@ -81,8 +82,8 @@ function LoginController(req, res, next) {
                 user: {
                     id: user.id,
                     first_name: user.first_name,
-                    roleName: user.roleName // Ensure roleName is used correctly
-                }
+                    roleName: user.roleName, // Ensure roleName is used correctly
+                },
             });
         }
         catch (err) {
@@ -96,7 +97,7 @@ function EODashboardController(req, res, next) {
         try {
             res.status(200).json({
                 message: "Welcome to Event Organizer Dashboard",
-                user: req.user
+                user: req.user,
             });
         }
         catch (err) {
@@ -113,14 +114,16 @@ function UpdateProfileController(req, res, next) {
                 throw new Error("file not found");
             // This now returns the Cloudinary filename
             const cloudinaryUrl = yield (0, auth_service_1.UpdateUserService)(file, email);
-            if (typeof cloudinaryUrl !== 'string' || !cloudinaryUrl) {
+            if (typeof cloudinaryUrl !== "string" || !cloudinaryUrl) {
                 throw new Error("Invalid response from UpdateUserService");
             }
-            const splitUrl = cloudinaryUrl.split('/');
-            const cloudinaryPath = splitUrl.slice(splitUrl.indexOf('upload') + 1).join('/');
+            const splitUrl = cloudinaryUrl.split("/");
+            const cloudinaryPath = splitUrl
+                .slice(splitUrl.indexOf("upload") + 1)
+                .join("/");
             res.status(200).send({
                 message: "Profile update successfully",
-                fileName: cloudinaryPath // e.g. "v12345/profile.jpg"
+                fileName: cloudinaryPath, // e.g. "v12345/profile.jpg"
             });
         }
         catch (err) {
@@ -187,7 +190,7 @@ function GetAllController(req, res, next) {
             const data = yield (0, auth_service_1.GetAll)();
             res.status(200).send({
                 message: "Successfully get all users",
-                users: data
+                users: data,
             });
         }
         catch (err) {
@@ -202,23 +205,24 @@ exports.AuthPasswordController = {
             try {
                 const { currentPassword, newPassword } = req.body;
                 if (!req.user) {
-                    res.status(400).send({ message: 'User is not authenticated' });
+                    res.status(400).send({ message: "User is not authenticated" });
                     return;
                 }
                 const userId = req.user.id;
-                if (typeof userId !== 'number') {
-                    res.status(400).send({ message: 'Invalid user ID' });
+                if (typeof userId !== "number") {
+                    res.status(400).send({ message: "Invalid user ID" });
                     return;
                 }
                 yield authService.changePassword(userId, currentPassword, newPassword);
                 res.status(200).json({ message: "Password Changed Successfully" });
             }
             catch (err) {
-                console.error('Password change error:', err);
-                if (err instanceof Error && err.message === 'User not found') {
+                console.error("Password change error:", err);
+                if (err instanceof Error && err.message === "User not found") {
                     res.status(404).send({ message: err.message });
                 }
-                if (err instanceof Error && err.message === 'Current password is incorrect') {
+                if (err instanceof Error &&
+                    err.message === "Current password is incorrect") {
                     res.status(400).send({ message: err.message });
                 }
                 next(err);
@@ -230,10 +234,12 @@ exports.AuthPasswordController = {
             try {
                 const { email } = req.body;
                 yield authService.requestPasswordReset(email);
-                res.status(200).send({ message: 'If an account with that email exists, a password reset link has been sent' });
+                res.status(200).send({
+                    message: "If an account with that email exists, a password reset link has been sent",
+                });
             }
             catch (err) {
-                console.error('Password reset request error:', err);
+                console.error("Password reset request error:", err);
                 next();
             }
         });
@@ -243,17 +249,17 @@ exports.AuthPasswordController = {
             try {
                 const { token, newPassword } = req.body;
                 yield authService.resetPassword(token, newPassword);
-                res.status(200).send({ message: 'Password reset successfully' });
+                res.status(200).send({ message: "Password reset successfully" });
             }
             catch (err) {
-                console.error('Password reset error:', err);
-                if (err instanceof Error && err.message === 'Invalid or expired token') {
+                console.error("Password reset error:", err);
+                if (err instanceof Error && err.message === "Invalid or expired token") {
                     res.status(400).send({ message: err.message });
                 }
                 next();
             }
         });
-    }
+    },
 };
 function VerifyResetTokenController(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -266,18 +272,46 @@ function VerifyResetTokenController(req, res, next) {
             res.status(200).json(result);
         }
         catch (err) {
-            console.error('Token verification error:', err);
+            console.error("Token verification error:", err);
             if (err instanceof jsonwebtoken_1.TokenExpiredError) {
                 res.status(400).json({ error: "Token has expired" });
             }
             else if (err instanceof jsonwebtoken_1.JsonWebTokenError) {
                 res.status(400).json({ error: "Invalid token" });
             }
-            else if (err.message.includes('Invalid') || err.message.includes('expired')) {
+            else if (err.message.includes("Invalid") ||
+                err.message.includes("expired")) {
                 res.status(400).json({ error: err.message });
             }
             next(err);
             res.status(500).json({ error: "Internal server error" });
+        }
+    });
+}
+function ResetPasswordLoggedInController(req, res, next) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const { newPassword } = req.body;
+            if (!req.user) {
+                res.status(401).send({ message: "User not authenticated" });
+                return;
+            }
+            const userId = req.user.id;
+            if (typeof userId !== "number") {
+                res.status(400).send({ message: "Invalid user ID" });
+                return;
+            }
+            yield (0, auth_service_1.resetPasswordLoggedInService)(userId, newPassword);
+            res.status(200).send({
+                message: "Password reset successfully. Please login again with your new password.",
+            });
+        }
+        catch (err) {
+            console.error("Logged-in password reset error:", err);
+            if (err instanceof Error) {
+                res.status(400).send({ message: err.message });
+            }
+            next(err);
         }
     });
 }

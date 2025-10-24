@@ -1,24 +1,429 @@
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-// transaction.router.ts
-const express_1 = __importDefault(require("express"));
-const transaction_controller_1 = require("../controllers/transaction.controller");
+const express_1 = require("express");
+const prisma_1 = __importDefault(require("../lib/prisma"));
 const auth_middleware_1 = require("../middlewares/auth.middleware");
-const multer_1 = __importDefault(require("multer"));
-const upload = (0, multer_1.default)({ dest: 'uploads/' });
-const router = express_1.default.Router();
-function asyncHandler(fn) {
-    return function (req, res, next) {
-        Promise.resolve(fn(req, res, next)).catch(next);
-    };
-}
-router.post('/:eventId', auth_middleware_1.VerifyToken, upload.single('paymentProof'), // Middleware upload file
-asyncHandler(transaction_controller_1.createTransaction));
-// Line Victor Adi Winata
-// This the router created for EO to view, accept, and reject transactions at the EO dashboard
-router.get("/organizer", auth_middleware_1.VerifyToken, auth_middleware_1.EOGuard, transaction_controller_1.getTransactionsController);
-router.patch("/:id/status", auth_middleware_1.VerifyToken, auth_middleware_1.EOGuard, transaction_controller_1.updateTransactionStatusController);
+const validate_1 = require("../middlewares/validate");
+const transaction_schema_1 = require("../schemas/transaction.schema");
+const client_1 = require("@prisma/client");
+const upload_1 = require("../middlewares/upload");
+const router = (0, express_1.Router)();
+/**
+ * GET /api/transactions
+ * Mendapatkan daftar transaksi milik user login
+ */
+router.get("/", auth_middleware_1.VerifyToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const transactions = yield prisma_1.default.transaction.findMany({
+            where: { userId: req.user.id },
+            include: {
+                event: {
+                    select: { title: true, location: true, startAt: true, endAt: true },
+                },
+                items: {
+                    include: {
+                        ticketType: { select: { name: true, priceIDR: true } },
+                    },
+                },
+            },
+            orderBy: { createdAt: "desc" },
+        });
+        res.json({ data: transactions });
+    }
+    catch (err) {
+        console.error("Error fetching transactions:", err);
+        res.status(500).json({ error: "Failed to fetch transactions" });
+    }
+}));
+/**
+ * POST /api/transactions
+ * Membuat transaksi baru (checkout tiket)
+ */
+router.post("/", auth_middleware_1.VerifyToken, (0, validate_1.validateSchema)(transaction_schema_1.createTransactionSchema), // Use the fixed schema
+(req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        // The data is now directly in req.body, not req.body.body
+        const { eventId, ticketTypeId, qty, usePoints, promoCode } = req.body;
+        console.log("Creating transaction with data:", {
+            eventId,
+            ticketTypeId,
+            qty,
+            usePoints,
+            promoCode,
+            userId: req.user.id,
+        });
+        const event = yield prisma_1.default.event.findUnique({
+            where: { id: eventId },
+            include: { ticketTypes: true },
+        });
+        if (!event) {
+            res.status(404).json({ error: "Event not found" });
+            return;
+        }
+        const ticketType = event.ticketTypes.find((t) => t.id === ticketTypeId);
+        if (!ticketType) {
+            res.status(400).json({ error: "Invalid ticket type" });
+            return;
+        }
+        const unitPrice = ticketType.priceIDR;
+        const subtotal = unitPrice * qty;
+        // === Apply promo ===
+        let promoDiscount = 0;
+        if (promoCode) {
+            const promo = yield prisma_1.default.promotion.findFirst({
+                where: {
+                    eventId,
+                    code: promoCode,
+                    startsAt: { lte: new Date() },
+                    endsAt: { gte: new Date() },
+                },
+            });
+            if (!promo) {
+                res.status(400).json({ error: "Invalid or expired promo code" });
+                return;
+            }
+            promoDiscount =
+                promo.type === "PERCENT"
+                    ? Math.floor((promo.value / 100) * subtotal)
+                    : promo.value;
+        }
+        // === Apply points ===
+        const user = yield prisma_1.default.users.findUnique({
+            where: { id: req.user.id },
+        });
+        if (!user) {
+            res.status(404).json({ error: "User not found" });
+            return;
+        }
+        let pointsUsed = 0;
+        if (usePoints && user.user_points > 0) {
+            pointsUsed = Math.min(user.user_points, subtotal - promoDiscount);
+            yield prisma_1.default.users.update({
+                where: { id: user.id },
+                data: { user_points: { decrement: pointsUsed } },
+            });
+        }
+        const totalPayable = subtotal - promoDiscount - pointsUsed;
+        // === Tentukan status awal ===
+        const initialStatus = totalPayable <= 0 ? "WAITING_CONFIRMATION" : "WAITING_PAYMENT";
+        // === Buat transaksi ===
+        const transaction = yield prisma_1.default.transaction.create({
+            data: {
+                userId: user.id,
+                eventId,
+                status: initialStatus,
+                totalBeforeIDR: subtotal,
+                pointsUsedIDR: pointsUsed,
+                promoCode: promoCode !== null && promoCode !== void 0 ? promoCode : null,
+                promoDiscountIDR: promoDiscount,
+                totalPayableIDR: totalPayable,
+                expiresAt: initialStatus === "WAITING_PAYMENT"
+                    ? new Date(Date.now() + 2 * 60 * 60 * 1000) // 2 jam
+                    : new Date(Date.now()), // langsung aktif untuk gratis
+                decisionDueAt: initialStatus === "WAITING_CONFIRMATION"
+                    ? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000) // 3 hari
+                    : null,
+                items: {
+                    create: [
+                        {
+                            ticketTypeId,
+                            qty,
+                            unitPriceIDR: unitPrice,
+                            lineTotalIDR: subtotal,
+                        },
+                    ],
+                },
+            },
+            include: {
+                event: {
+                    select: {
+                        id: true,
+                        title: true,
+                        location: true,
+                        ticketTypes: {
+                            select: {
+                                id: true,
+                                name: true,
+                                priceIDR: true,
+                                quota: true,
+                            },
+                        },
+                    },
+                },
+                items: {
+                    include: {
+                        ticketType: { select: { id: true, name: true, priceIDR: true } },
+                    },
+                },
+            },
+        });
+        res.status(201).json({
+            message: totalPayable <= 0
+                ? "Free ticket claimed successfully — no payment required"
+                : "Transaction created successfully",
+            data: transaction,
+        });
+    }
+    catch (err) {
+        console.error("Error creating transaction:", err);
+        res.status(500).json({ error: "Failed to create transaction" });
+    }
+}));
+/**
+ * POST /api/transactions/:id/proof
+ * Upload bukti pembayaran (file upload)
+ */
+router.post("/:id/proof", auth_middleware_1.VerifyToken, upload_1.upload.single("paymentProof"), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { id } = req.params;
+        // === Validasi file ===
+        if (!req.file) {
+            res
+                .status(400)
+                .json({ error: "File bukti pembayaran wajib diunggah." });
+            return;
+        }
+        // === Ambil transaksi ===
+        const transaction = yield prisma_1.default.transaction.findUnique({
+            where: { id },
+            include: { user: true, event: true },
+        });
+        if (!transaction) {
+            res.status(404).json({ error: "Transaksi tidak ditemukan." });
+            return;
+        }
+        // === Pastikan transaksi milik user yang sedang login ===
+        if (transaction.userId !== req.user.id) {
+            res
+                .status(403)
+                .json({ error: "Tidak diizinkan mengunggah bukti pembayaran ini." });
+            return;
+        }
+        // === Pastikan status masih menunggu pembayaran ===
+        if (transaction.status !== client_1.TxStatus.WAITING_PAYMENT) {
+            res.status(400).json({
+                error: `Tidak dapat upload bukti untuk transaksi dengan status ${transaction.status}.`,
+            });
+            return;
+        }
+        // === Simpan file bukti ke DB ===
+        const proofUrl = `/uploads/${req.file.filename}`;
+        const updated = yield prisma_1.default.transaction.update({
+            where: { id },
+            data: {
+                paymentProofUrl: proofUrl,
+                paymentProofAt: new Date(),
+                status: client_1.TxStatus.WAITING_CONFIRMATION,
+            },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                        email: true,
+                    },
+                },
+                event: {
+                    select: {
+                        id: true,
+                        title: true,
+                        location: true,
+                        startAt: true,
+                        endAt: true,
+                        ticketTypes: {
+                            select: { id: true, name: true, priceIDR: true },
+                        },
+                    },
+                },
+                items: {
+                    include: {
+                        ticketType: {
+                            select: { id: true, name: true, priceIDR: true },
+                        },
+                    },
+                },
+            },
+        });
+        res.json({
+            message: "Bukti pembayaran berhasil diunggah.",
+            data: updated,
+        });
+    }
+    catch (err) {
+        console.error("Error uploading proof:", err);
+        res.status(500).json({
+            error: "Terjadi kesalahan saat mengunggah bukti pembayaran.",
+        });
+    }
+}));
+/**
+ * PUT /api/transactions/:id/status
+ * Organizer/Admin mengubah status transaksi
+ */
+router.put("/:id/status", auth_middleware_1.VerifyToken, auth_middleware_1.EOGuard, (0, validate_1.validateSchema)(transaction_schema_1.updateTransactionStatusSchema), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+        const tx = yield prisma_1.default.transaction.findUnique({
+            where: { id },
+            include: {
+                user: true,
+                event: { select: { organizerId: true } },
+            },
+        });
+        if (!tx) {
+            res.status(404).json({ error: "Transaction not found" });
+            return;
+        }
+        // Since EOGuard already ensures user is event organizer, check if they own the event
+        const organizer = yield prisma_1.default.organizerProfile.findUnique({
+            where: { userId: req.user.id },
+        });
+        if (!organizer) {
+            res.status(404).json({ error: "Organizer profile not found" });
+            return;
+        }
+        if (((_a = tx.event) === null || _a === void 0 ? void 0 : _a.organizerId) !== organizer.id) {
+            res
+                .status(403)
+                .json({ error: "Unauthorized to update this transaction" });
+            return;
+        }
+        const updated = yield prisma_1.default.transaction.update({
+            where: { id },
+            data: { status },
+        });
+        // rollback points jika dibatalkan/rejected
+        if (["CANCELED", "REJECTED", "EXPIRED"].includes(status)) {
+            yield prisma_1.default.users.update({
+                where: { id: tx.userId },
+                data: { user_points: { increment: tx.pointsUsedIDR } },
+            });
+        }
+        res.json({
+            message: "Transaction status updated successfully",
+            data: updated,
+        });
+    }
+    catch (err) {
+        console.error("Error updating status:", err);
+        res.status(500).json({ error: "Failed to update transaction status" });
+    }
+}));
+/**
+ * GET /api/transactions/manage
+ * Menampilkan transaksi (Khusus Organizer)
+ */
+router.get("/manage", auth_middleware_1.VerifyToken, auth_middleware_1.EOGuard, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { status } = req.query;
+        const where = {};
+        if (status) {
+            where.status = status;
+        }
+        const organizer = yield prisma_1.default.organizerProfile.findUnique({
+            where: { userId: req.user.id },
+        });
+        if (!organizer) {
+            res.status(404).json({ error: "Organizer profile not found" });
+            return;
+        }
+        where.event = { organizerId: organizer.id };
+        const transactions = yield prisma_1.default.transaction.findMany({
+            where,
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                        email: true,
+                    },
+                },
+                event: {
+                    select: {
+                        id: true,
+                        title: true,
+                        startAt: true,
+                        endAt: true,
+                        location: true,
+                    },
+                },
+                items: {
+                    include: {
+                        ticketType: { select: { name: true, priceIDR: true } },
+                    },
+                },
+            },
+            orderBy: { createdAt: "desc" },
+        });
+        res.json({ data: transactions });
+    }
+    catch (err) {
+        console.error("Error fetching managed transactions:", err);
+        res.status(500).json({ error: "Failed to fetch managed transactions" });
+    }
+}));
+router.get("/organizer", auth_middleware_1.VerifyToken, auth_middleware_1.EOGuard, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const organizer = yield prisma_1.default.organizerProfile.findUnique({
+            where: { userId: req.user.id },
+        });
+        if (!organizer) {
+            res.status(404).json({ error: "Organizer profile not found" });
+            return;
+        }
+        const transactions = yield prisma_1.default.transaction.findMany({
+            where: {
+                event: {
+                    organizerId: organizer.id,
+                },
+            },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                        email: true,
+                    },
+                },
+                event: {
+                    select: {
+                        id: true,
+                        title: true,
+                        startAt: true,
+                        endAt: true,
+                        location: true,
+                    },
+                },
+                items: {
+                    include: {
+                        ticketType: { select: { name: true, priceIDR: true } },
+                    },
+                },
+            },
+            orderBy: { createdAt: "desc" },
+        });
+        res.json({ data: transactions });
+    }
+    catch (err) {
+        console.error("Error fetching organizer transactions:", err);
+        res.status(500).json({ error: "Failed to fetch organizer transactions" });
+    }
+}));
 exports.default = router;

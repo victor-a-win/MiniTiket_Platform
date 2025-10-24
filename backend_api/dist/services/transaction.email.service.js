@@ -27,21 +27,22 @@ function sendTransactionStatusEmail(transaction, status, reason) {
             const html = compiledTemplate({
                 name: transaction.user.first_name,
                 eventName: transaction.event.name,
-                quantity: transaction.quantity,
-                totalAmount: transaction.total_amount.toFixed(2),
+                totalAmount: transaction.totalPayableIDR.toFixed(2),
                 transactionId: transaction.id,
                 reason: reason || "Payment verification failed",
-                pointsRestored: transaction.point_used,
-                couponRestored: transaction.coupon_code
+                pointsRestored: transaction.pointsUsedIDR,
+                couponRestored: transaction.promoCode,
             });
             yield nodemailer_1.Transporter.sendMail({
                 from: `TuneInLive Events <${config_1.NODEMAILER_USER}>`,
                 to: transaction.user.email,
-                subject: status === 'approved'
+                subject: status === "approved"
                     ? "Payment Approved - Tickets Confirmed!"
                     : "Payment Declined - Action Required",
                 html,
-                attachments: [ /* logo attachment */]
+                attachments: [
+                /* logo attachment */
+                ],
             });
         }
         catch (error) {

@@ -8,11 +8,16 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.VerifyToken = VerifyToken;
 exports.EOGuard = EOGuard;
+exports.OrganizerProfileGuard = OrganizerProfileGuard;
 const jsonwebtoken_1 = require("jsonwebtoken");
 const config_1 = require("../config");
+const prisma_1 = __importDefault(require("../lib/prisma"));
 function VerifyToken(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         var _a, _b;
@@ -32,7 +37,10 @@ function VerifyToken(req, res, next) {
             // if (!verifyUser) throw new Error("Invalid Token");
             // req.user = verifyUser as IUserReqParam;
             const decoded = (0, jsonwebtoken_1.verify)(token, String(config_1.SECRET_KEY));
-            if (!decoded.id || !decoded.first_name || !decoded.last_name || !decoded.roleName) {
+            if (!decoded.id ||
+                !decoded.first_name ||
+                !decoded.last_name ||
+                !decoded.roleName) {
                 res.status(401).json({ error: "Invalid Token" });
                 return;
             }
@@ -40,7 +48,7 @@ function VerifyToken(req, res, next) {
             next();
         }
         catch (err) {
-            console.error('Authentication error:', err);
+            console.error("Authentication error:", err);
             res.status(401).json({ error: "Invalid Token" });
             return;
         }
@@ -58,6 +66,41 @@ function EOGuard(req, res, next) {
         }
         catch (err) {
             next(err);
+        }
+    });
+}
+function OrganizerProfileGuard(req, res, next) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b;
+        try {
+            if (((_b = (_a = req.user) === null || _a === void 0 ? void 0 : _a.roleName) === null || _b === void 0 ? void 0 : _b.toLowerCase()) === "event organizer") {
+                const organizer = yield prisma_1.default.organizerProfile.findUnique({
+                    where: { userId: req.user.id },
+                });
+                if (!organizer) {
+                    // Auto-create organizer profile if missing
+                    const user = yield prisma_1.default.users.findUnique({
+                        where: { id: req.user.id },
+                    });
+                    if (user) {
+                        const newOrganizer = yield prisma_1.default.organizerProfile.create({
+                            data: {
+                                userId: user.id,
+                                displayName: `${user.first_name} ${user.last_name}`,
+                                bio: null,
+                                ratingsAvg: 0,
+                                ratingsCount: 0,
+                            },
+                        });
+                        console.log("Auto-created organizer profile:", newOrganizer.id);
+                    }
+                }
+            }
+            next();
+        }
+        catch (error) {
+            console.error("Error in OrganizerProfileGuard:", error);
+            next();
         }
     });
 }

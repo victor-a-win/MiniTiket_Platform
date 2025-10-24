@@ -15,11 +15,11 @@ function ReqValidator(schema) {
                 // Extract error messages from ZodError
                 // Map ZodError messages to a more user-friendly format
                 const message = err.errors.map((issue) => ({
-                    message: `${issue.message}`
+                    message: `${issue.message}`,
                 }));
                 res.status(500).send({
                     message: "NG",
-                    details: message
+                    details: message,
                 });
                 res.end();
             }

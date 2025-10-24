@@ -29,10 +29,11 @@ router.get("/me", auth_middleware_1.VerifyToken, auth_controller_1.getCurrentUse
 // router for get all users
 router.get("/users", auth_middleware_1.VerifyToken, auth_middleware_1.EOGuard, auth_controller_1.GetAllController);
 // Password change - requires authentication
-router.post('/change-password', auth_middleware_1.VerifyToken, auth_controller_1.AuthPasswordController.changePassword);
+router.post("/change-password", auth_middleware_1.VerifyToken, auth_controller_1.AuthPasswordController.changePassword);
 // Password reset routes
-router.post('/request-password-reset', auth_controller_1.AuthPasswordController.requestPasswordReset);
-router.post('/reset-password', auth_controller_1.AuthPasswordController.resetPassword);
+router.post("/request-password-reset", auth_controller_1.AuthPasswordController.requestPasswordReset);
+router.post("/reset-password", auth_controller_1.AuthPasswordController.resetPassword);
 router.post("/verify-reset-token", auth_controller_1.VerifyResetTokenController);
+router.post("/reset-password-loggedin", auth_middleware_1.VerifyToken, auth_controller_1.ResetPasswordLoggedInController);
 // exporting the router to be used in index.ts
 exports.default = router;
