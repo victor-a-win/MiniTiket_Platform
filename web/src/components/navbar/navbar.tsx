@@ -1,8 +1,7 @@
 "use client";
-
+import { useAuth } from "@/hooks/useAuth";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hook";
 import { useRouter } from "next/navigation";
-import { logout } from "@/lib/redux/features/authSlice";
 import { useEffect, useState } from "react";
 
 import "./navbar.styles.css"
@@ -10,7 +9,7 @@ import "./navbar.styles.css"
 const menus = [
   {
     label: "EO Dashboard",
-    path: "/eo-dashboard", // Make sure this matches the middleware matcher
+    path: "/eo-dashboard",
     roleName: "Event Organizer"
   },
 ];
@@ -20,23 +19,49 @@ export default function Navbar() {
   const auth = useAppSelector((state) => state.auth);
   const dispatch = useAppDispatch();
   const router = useRouter();
+  
+  const { logout } = useAuth();
 
   // add loading state
   useEffect(() => {
     setIsHydrated(true);
   }, []);
 
-  const hasRequiredRole = (requiredRole: string | undefined) => {
-    if (!requiredRole) return true;
-    if (!auth.isLogin || !auth.user?.roleName) return false;
-    return auth.user.roleName.toLowerCase() === requiredRole.toLowerCase();
+  // Debug: Log the auth state to see what's happening
+  useEffect(() => {
+    if (auth.user) {
+      console.log("🔍 Navbar Auth Debug:", {
+        isLogin: auth.isLogin,
+        roleName: auth.user.roleName,
+        userData: auth.user
+      });
+    }
+  }, [auth]);
+
+const hasRequiredRole = (requiredRole: string | undefined) => {
+  if (!requiredRole) return true;
+  if (!auth.isLogin || !auth.user?.roleName) return false;
+  
+  // Normalize both role names for comparison
+  const normalizeRole = (role: string) => {
+    return role.toLowerCase().trim().replace(/\s+/g, ' ');
   };
+  
+  const userRole = normalizeRole(auth.user.roleName);
+  const required = normalizeRole(requiredRole);
+  
+  console.log("🔍 Normalized Role Check:", {
+    userRole,
+    required,
+    matches: userRole === required
+  });
+  
+  return userRole === required;
+};
 
   if (!isHydrated) {
     return <div className="h-[140px] p-10">Loading...</div>;
   }
-
-  console.log("Auth state:", auth); // Debugging line
 
   // Function to handle menu item click
   const onMenuItemClick = (path: string) => () => {
@@ -82,17 +107,17 @@ export default function Navbar() {
               <div 
                 className="Auth-Button-Styles no-underline hover:underline
                           pr-1.5 pl-1.5 sm:pl-3 sm:pr-3"
-              > Welcome, {auth.user?.first_name}
+              > 
+                Welcome, {auth.user?.first_name} ({auth.user?.roleName})
               </div>
 
               <div>
                 <button 
-                  className="Auth-Button-Styles cursor-pointer pr-2 pl-2 mr-2
-                            sm:pl-3 sm:pr-3 sm:mr-7" 
-                  onClick={() => {
-                  dispatch(logout());
-                  router.push("/");
-                     }}> Logout
+                  onClick={logout}
+                  className="Auth-Button-Styles cursor-pointer pr-2 pl-2 mr-2 
+                            sm:pl-3 sm:pr-3 sm:mr-7"
+                >
+                  Logout
                 </button>
               </div>
 
@@ -130,17 +155,20 @@ export default function Navbar() {
               Contact
           </button>
 
+          {/* Debug: Show EO Dashboard button conditionally */}
           <div className="EO-Button-Stlyes cursor-pointer pl-2 pr-2 sm:pl-4 sm:pr-4">
             {menus.map((menu, idx) => {
-          // Using the new role checking function
-            if (!hasRequiredRole(menu.roleName)) return null;
+              const hasRole = hasRequiredRole(menu.roleName);
+              console.log(`🔍 Menu ${menu.label}: hasRole = ${hasRole}`);
+              
+              if (!hasRole) return null;
               return (
-              <div
-                key={idx}
-                onClick={onMenuItemClick(menu.path)}
-              >
-                {menu.label}
-              </div>
+                <div
+                  key={idx}
+                  onClick={onMenuItemClick(menu.path)}
+                >
+                  {menu.label}
+                </div>
               );
             })}
           </div>

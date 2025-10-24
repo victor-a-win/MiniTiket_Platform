@@ -1,8 +1,19 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Event, Attendee } from '@/interfaces/event.interface';
+import { Event } from '@/interfaces/event.interface';
 import axios from "axios";
+import { useAuth } from '@/hooks/useAuth';
+
+interface Attendee {
+  id: string;
+  quantity: number;
+  total_amount: number;
+  user: {
+    first_name: string;
+    last_name: string;
+  };
+}
 
 export default function AttendeeList() {
   const [events, setEvents] = useState<Event[]>([]);
@@ -10,6 +21,7 @@ export default function AttendeeList() {
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const { token } = useAuth();
 
   // Fetch organizer's events
   useEffect(() => {
@@ -17,34 +29,101 @@ export default function AttendeeList() {
       try {
         const response = await axios.get(
           `${process.env.NEXT_PUBLIC_BASE_API_URL}/api/events/organizer/events`,
-            { withCredentials: true }
-          );
-        if (response.status !== 200) throw new Error('Failed to fetch events');
-        const data = response.data;
-        setEvents(data);
+          { 
+            headers: {
+              Authorization: `Bearer ${token}`,
+            }
+          }
+        );
+        
+        console.log('Events API Response:', response.data); // Debug log
+        
+        // Handle the response structure properly
+        const eventsData = response.data.data || response.data;
+        
+        if (!Array.isArray(eventsData)) {
+          console.error('Expected array but got:', typeof eventsData, eventsData);
+          setEvents([]);
+          return;
+        }
+
+        // Transform events to match your Event interface
+        const transformedEvents: Event[] = eventsData.map((event: any) => ({
+          id: event.id,
+          name: event.title || event.name || 'Untitled Event',
+          title: event.title,
+          description: event.description,
+          category: event.category,
+          location: event.location,
+          start_date: event.startAt || event.start_date,
+          end_date: event.endAt || event.end_date,
+          startAt: event.startAt,
+          endAt: event.endAt,
+          isPaid: event.isPaid,
+          capacity: event.capacity,
+          seats: event.seatsAvailable || event.capacity,
+          seatsAvailable: event.seatsAvailable,
+          price: 0, // Default value or calculate from ticketTypes
+          image_url: event.coverImageUrl,
+          organizerId: event.organizerId,
+          ticketTypes: event.ticketTypes || [],
+          promotions: event.promotions || [],
+          reviews: event.reviews || []
+        }));
+
+        setEvents(transformedEvents);
       } catch (err) {
+        console.error('Error fetching events:', err);
         setError(err instanceof Error ? err.message : 'Failed to load events');
+        setEvents([]);
       }
     };
-    fetchEvents();
-  }, []);
+    
+    if (token) {
+      fetchEvents();
+    }
+  }, [token]);
 
   // Fetch attendees when event is selected
   useEffect(() => {
-    if (!selectedEventId) return;
+    if (!selectedEventId || !token) return;
 
     const fetchAttendees = async () => {
       setIsLoading(true);
       try {
+        // First, let's check what transactions exist for this event
         const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_BASE_API_URL}/api/events/organizer/attendees/${selectedEventId}`,
-          { withCredentials: true } 
+          `${process.env.NEXT_PUBLIC_BASE_API_URL}/api/transactions/manage`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            }
+          }
         );
-        if (response.status !== 200) throw new Error('Failed to fetch attendees');
-        const data = response.data;
-        setAttendees(data);
+        
+        console.log('Transactions response:', response.data); // Debug log
+        
+        // Filter transactions for the selected event and status DONE
+        const transactions = response.data.data || response.data || [];
+        const eventTransactions = transactions.filter((tx: any) => 
+          tx.eventId === selectedEventId && tx.status === 'DONE'
+        );
+
+        // Transform to attendee format
+        const attendeesData: Attendee[] = eventTransactions.map((tx: any) => ({
+          id: tx.id,
+          quantity: tx.items?.reduce((sum: number, item: any) => sum + item.qty, 0) || 0,
+          total_amount: tx.totalPayableIDR || 0,
+          user: {
+            first_name: tx.user?.first_name || 'Unknown',
+            last_name: tx.user?.last_name || 'User'
+          }
+        }));
+
+        setAttendees(attendeesData);
         setError('');
       } catch (err) {
+        console.error('Error fetching attendees:', err);
         setError(err instanceof Error ? err.message : 'Failed to load attendees');
         setAttendees([]);
       } finally {
@@ -52,7 +131,7 @@ export default function AttendeeList() {
       }
     };
     fetchAttendees();
-  }, [selectedEventId]);
+  }, [selectedEventId, token]);
 
   return (
     <div className="mt-8 p-6 bg-white rounded-lg shadow-md">
@@ -71,7 +150,7 @@ export default function AttendeeList() {
           <option value="">Choose an event...</option>
           {events.map((event) => (
             <option key={event.id} value={event.id}>
-              {event.name}
+              {event.title || event.name}
             </option>
           ))}
         </select>
@@ -109,7 +188,7 @@ export default function AttendeeList() {
                     {attendee.quantity}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    ${attendee.total_amount.toFixed(2)}
+                    Rp {attendee.total_amount.toLocaleString('id-ID')}
                   </td>
                 </tr>
               ))}
@@ -117,7 +196,7 @@ export default function AttendeeList() {
           </table>
         </div>
       ) : (
-        selectedEventId && <p className="text-gray-500">No attendees found for this event.</p>
+        selectedEventId && !isLoading && <p className="text-gray-500">No attendees found for this event.</p>
       )}
     </div>
   );

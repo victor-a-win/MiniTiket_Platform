@@ -12,17 +12,33 @@ export default function EventsLandingPage() {
   const [location, setLocation] = useState("");
 
   useEffect(() => {
-    fetchEvents().then(setEvents);
+    fetchEvents().then(response => {
+      // Handle the response structure properly
+      if (response.data && Array.isArray(response.data.data)) {
+        setEvents(response.data.data);
+      } else if (Array.isArray(response.data)) {
+        setEvents(response.data);
+      } else if (Array.isArray(response)) {
+        setEvents(response);
+      } else {
+        console.error("Unexpected response structure:", response);
+        setEvents([]);
+      }
+    }).catch(error => {
+      console.error("Failed to fetch events:", error);
+      setEvents([]);
+    });
   }, []);
 
-  const filtered = events.filter(e =>
-    (e.name.toLowerCase().includes(search.toLowerCase()) || e.description.toLowerCase().includes(search.toLowerCase())) &&
-    (category ? e.category === category : true) &&
-    (location ? e.location === location : true)
-  );
+const filtered = events.filter(e =>
+  (e.title?.toLowerCase().includes(search.toLowerCase()) || 
+   e.description?.toLowerCase().includes(search.toLowerCase())) &&
+  (category ? e.category === category : true) &&
+  (location ? e.location === location : true)
+);
 
-  const categories = Array.from(new Set(events.map(e => e.category)));
-  const locations = Array.from(new Set(events.map(e => e.location)));
+  const categories = Array.from(new Set(events.map(e => e.category).filter(Boolean)));
+  const locations = Array.from(new Set(events.map(e => e.location).filter(Boolean)));
 
   return (
     <div className="container mx-auto p-6">
@@ -32,7 +48,7 @@ export default function EventsLandingPage() {
       <div className="flex flex-col md:flex-row gap-4 mb-6">
         <input
           type="text"
-          placeholder="Cari event..."
+          placeholder="Find events..."
           value={search}
           onChange={e => setSearch(e.target.value)}
           className="w-full md:w-1/3 p-3 border rounded-lg bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-pink-500 transition"
@@ -42,7 +58,7 @@ export default function EventsLandingPage() {
           onChange={e => setCategory(e.target.value)}
           className="p-3 rounded-lg bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-pink-500 transition"
         >
-          <option value="">Semua Kategori</option>
+          <option value="">All Category</option>
           {categories.map(cat => (
             <option key={cat} value={cat}>{cat}</option>
           ))}
@@ -52,7 +68,7 @@ export default function EventsLandingPage() {
           onChange={e => setLocation(e.target.value)}
           className="p-3 rounded-lg bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-pink-500 transition"
         >
-          <option value="">Semua Lokasi</option>
+          <option value="">All Location</option>
           {locations.map(loc => (
             <option key={loc} value={loc}>{loc}</option>
           ))}
@@ -65,7 +81,7 @@ export default function EventsLandingPage() {
           ))
         ) : (
           <div className="text-center text-gray-400 mt-10 col-span-full">
-            Tidak ada event ditemukan.
+            No events found matching your criteria.
           </div>
         )}
       </div>

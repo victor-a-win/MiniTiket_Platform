@@ -1,18 +1,19 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  /* config options here */
-};
-
-module.exports = {
-  async rewrites() {
-    return [
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  images: {
+    domains: ["localhost"],
+    remotePatterns: [
       {
-        source: "/api/:path*",
-        destination: "http://localhost:8000/:path*",
+        protocol: "http",
+        hostname: "localhost",
+        port: "8000",
+        pathname: "/uploads/**",
       },
-    ];
+    ],
+  },
+  env: {
+    NEXT_PUBLIC_BASE_API_URL: process.env.NEXT_PUBLIC_BASE_API_URL,
   },
 };
 
-export default nextConfig;
+module.exports = nextConfig;
