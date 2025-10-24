@@ -50,15 +50,26 @@ router.get(
 router.post(
   "/",
   VerifyToken,
-  validateSchema(createTransactionSchema),
+  validateSchema(createTransactionSchema), // Use the fixed schema
   async (req: Request, res: Response): Promise<void> => {
     try {
+      // The data is now directly in req.body, not req.body.body
       const { eventId, ticketTypeId, qty, usePoints, promoCode } = req.body;
+
+      console.log("Creating transaction with data:", {
+        eventId,
+        ticketTypeId,
+        qty,
+        usePoints,
+        promoCode,
+        userId: req.user!.id,
+      });
 
       const event = await prisma.event.findUnique({
         where: { id: eventId },
         include: { ticketTypes: true },
       });
+
       if (!event) {
         res.status(404).json({ error: "Event not found" });
         return;
@@ -412,6 +423,62 @@ router.get(
     } catch (err) {
       console.error("Error fetching managed transactions:", err);
       res.status(500).json({ error: "Failed to fetch managed transactions" });
+    }
+  }
+);
+
+router.get(
+  "/organizer",
+  VerifyToken,
+  EOGuard,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const organizer = await prisma.organizerProfile.findUnique({
+        where: { userId: req.user!.id },
+      });
+
+      if (!organizer) {
+        res.status(404).json({ error: "Organizer profile not found" });
+        return;
+      }
+
+      const transactions = await prisma.transaction.findMany({
+        where: {
+          event: {
+            organizerId: organizer.id,
+          },
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              first_name: true,
+              last_name: true,
+              email: true,
+            },
+          },
+          event: {
+            select: {
+              id: true,
+              title: true,
+              startAt: true,
+              endAt: true,
+              location: true,
+            },
+          },
+          items: {
+            include: {
+              ticketType: { select: { name: true, priceIDR: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      res.json({ data: transactions });
+    } catch (err) {
+      console.error("Error fetching organizer transactions:", err);
+      res.status(500).json({ error: "Failed to fetch organizer transactions" });
     }
   }
 );

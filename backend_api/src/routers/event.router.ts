@@ -1,6 +1,10 @@
 import { Router, Request, Response } from "express";
 import prisma from "../lib/prisma";
-import { VerifyToken, EOGuard } from "../middlewares/auth.middleware";
+import {
+  VerifyToken,
+  EOGuard,
+  OrganizerProfileGuard,
+} from "../middlewares/auth.middleware";
 import { validateSchema } from "../middlewares/validate";
 import { createEventSchema, updateEventSchema } from "../schemas/event.schema";
 
@@ -14,6 +18,7 @@ router.get(
   "/mine",
   VerifyToken,
   EOGuard,
+  OrganizerProfileGuard,
   async (req: Request, res: Response): Promise<void> => {
     try {
       const organizer = await prisma.organizerProfile.findUnique({
@@ -328,6 +333,69 @@ router.put(
 );
 
 /**
+ * DELETE /api/events/:id
+ * Delete an event
+ */
+router.delete(
+  "/:id",
+  VerifyToken,
+  EOGuard,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+
+      // Find the organizer
+      const organizer = await prisma.organizerProfile.findUnique({
+        where: { userId: req.user!.id },
+      });
+
+      if (!organizer) {
+        res.status(404).json({ error: "Organizer profile not found" });
+        return;
+      }
+
+      // Find the event and verify ownership
+      const event = await prisma.event.findUnique({
+        where: { id },
+      });
+
+      if (!event) {
+        res.status(404).json({ error: "Event not found" });
+        return;
+      }
+
+      if (event.organizerId !== organizer.id) {
+        res.status(403).json({ error: "Unauthorized to delete this event" });
+        return;
+      }
+
+      // Check if there are any transactions for this event
+      const transactions = await prisma.transaction.findMany({
+        where: { eventId: id },
+        take: 1, // We just need to know if any exist
+      });
+
+      if (transactions.length > 0) {
+        res.status(400).json({
+          error: "Cannot delete event with existing transactions",
+        });
+        return;
+      }
+
+      // Delete the event (this will cascade delete related records due to Prisma schema)
+      await prisma.event.delete({
+        where: { id },
+      });
+
+      res.json({ message: "Event deleted successfully" });
+    } catch (err) {
+      console.error("Error deleting event:", err);
+      res.status(500).json({ error: "Failed to delete event" });
+    }
+  }
+);
+
+/**
  * GET /api/events/organizers/:id
  * Mendapatkan detail lengkap organizer beserta event dan review
  */
@@ -430,6 +498,132 @@ router.get(
     } catch (err) {
       console.error("Error fetching organizer detail:", err);
       res.status(500).json({ error: "Failed to fetch organizer detail" });
+    }
+  }
+);
+
+// In event.router.ts - replace the current statistics endpoint
+router.get(
+  "/organizer/statistics",
+  VerifyToken,
+  EOGuard,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { groupBy = "month" } = req.query;
+
+      const organizer = await prisma.organizerProfile.findUnique({
+        where: { userId: req.user!.id },
+      });
+
+      if (!organizer) {
+        res.status(404).json({ error: "Organizer profile not found" });
+        return;
+      }
+
+      // Get organizer's events with transactions
+      const events = await prisma.event.findMany({
+        where: { organizerId: organizer.id },
+        include: {
+          ticketTypes: true,
+          Transaction: {
+            where: { status: "DONE" },
+            include: { items: true },
+          },
+        },
+      });
+
+      // Group by period based on groupBy parameter
+      const groupedData = groupEventsByPeriod(events, groupBy as string);
+
+      res.json(groupedData);
+    } catch (err) {
+      console.error("Error fetching organizer statistics:", err);
+      res.status(500).json({ error: "Failed to fetch statistics" });
+    }
+  }
+);
+
+// Helper function to group events by period
+function groupEventsByPeriod(events: any[], groupBy: string) {
+  const groups: { [key: string]: any } = {};
+
+  events.forEach((event) => {
+    let periodKey: string;
+
+    // Determine period key based on groupBy
+    if (groupBy === "year") {
+      periodKey = new Date(event.createdAt).getFullYear().toString();
+    } else if (groupBy === "month") {
+      const date = new Date(event.createdAt);
+      periodKey = `${date.getFullYear()}-${(date.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}`;
+    } else {
+      // day
+      const date = new Date(event.createdAt);
+      periodKey = date.toISOString().split("T")[0]; // YYYY-MM-DD
+    }
+
+    if (!groups[periodKey]) {
+      groups[periodKey] = {
+        period: periodKey,
+        event_count: 0,
+        tickets_sold: 0,
+        total_revenue: 0,
+      };
+    }
+
+    // Count this event
+    groups[periodKey].event_count += 1;
+
+    // Calculate tickets sold and revenue from transactions
+    event.Transaction.forEach((transaction: any) => {
+      groups[periodKey].total_revenue += transaction.totalPayableIDR;
+
+      transaction.items.forEach((item: any) => {
+        groups[periodKey].tickets_sold += item.qty;
+      });
+    });
+  });
+
+  // Convert to array and sort by period
+  return Object.values(groups).sort((a: any, b: any) =>
+    a.period.localeCompare(b.period)
+  );
+}
+
+router.get(
+  "/organizer/events",
+  VerifyToken,
+  EOGuard,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const organizer = await prisma.organizerProfile.findUnique({
+        where: { userId: req.user!.id },
+      });
+
+      if (!organizer) {
+        res.status(404).json({ error: "Organizer profile not found" });
+        return;
+      }
+
+      const events = await prisma.event.findMany({
+        where: { organizerId: organizer.id },
+        include: {
+          ticketTypes: true,
+          promotions: true,
+          Transaction: {
+            where: { status: "DONE" },
+            select: { id: true, totalPayableIDR: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      res.json({ data: events });
+    } catch (err) {
+      console.error("Error fetching organizer events:", err);
+      res.status(500).json({ error: "Failed to fetch organizer events" });
     }
   }
 );

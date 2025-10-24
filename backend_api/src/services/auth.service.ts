@@ -117,6 +117,20 @@ async function RegisterService(param: IRegisterParam) {
           },
         });
 
+        // If user is registering as an organizer (roleId = 2), create organizer profile
+        if (param.roleId === 2) {
+          await tx.organizerProfile.create({
+            data: {
+              userId: user.id,
+              displayName: `${param.first_name} ${param.last_name}`,
+              bio: null,
+              ratingsAvg: 0,
+              ratingsCount: 0,
+            },
+          });
+          console.log(`Organizer profile created for user: ${user.id}`);
+        }
+
         // 1. Check referral code
         // If referral code is provided, find the user with that code
         if (param.referred_by) {
@@ -264,6 +278,31 @@ async function LoginService(param: ILoginParam) {
     const checkPass = await compare(param.password, users.password);
 
     if (!checkPass) throw new Error("Incorrect password");
+
+    // ========== ADD ORGANIZER PROFILE CHECK/CREATION HERE ==========
+    // If user is an organizer but doesn't have an organizer profile, create one
+    if (users.role.name.toLowerCase() === "event organizer") {
+      const existingOrganizerProfile = await prisma.organizerProfile.findUnique(
+        {
+          where: { userId: users.id },
+        }
+      );
+
+      if (!existingOrganizerProfile) {
+        // Create organizer profile if missing
+        await prisma.organizerProfile.create({
+          data: {
+            userId: users.id,
+            displayName: `${users.first_name} ${users.last_name}`,
+            bio: null,
+            ratingsAvg: 0,
+            ratingsCount: 0,
+          },
+        });
+        console.log(`Auto-created organizer profile for user: ${users.id}`);
+      }
+    }
+    // ========== END ORGANIZER PROFILE CHECK ==========
 
     // payload is the data that will be included in the JWT token
     const payload = {

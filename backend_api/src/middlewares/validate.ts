@@ -8,10 +8,14 @@ import { Request, Response, NextFunction } from "express";
 export function validateSchema(schema: AnyZodObject) {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
-      schema.parse(req.body);
+      schema.parse(req.body); // Remove the .body access
       next();
     } catch (err: any) {
-      res.status(400).json({ error: err.errors });
+      console.error("Validation error:", err.errors);
+      res.status(400).json({
+        error: "Validation failed",
+        details: err.errors,
+      });
     }
   };
 }
