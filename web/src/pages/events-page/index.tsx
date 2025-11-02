@@ -4,9 +4,14 @@ import { useEffect, useState } from "react";
 import EventCard from "@/components/events/EventCard";
 import { Event } from "@/interfaces/event.interface";
 import { fetchEvents } from "@/lib/api/events";
+import { GetServerSideProps } from "next";
 
-// Add this to disable static generation
-export const dynamic = 'force-dynamic';
+// For Pages Router, use getServerSideProps instead of dynamic
+export const getServerSideProps: GetServerSideProps = async (context) => {
+  return {
+    props: {}, // Will be passed to the page component as props
+  };
+};
 
 export default function EventsLandingPage() {
   const [events, setEvents] = useState<Event[]>([]);
@@ -33,12 +38,12 @@ export default function EventsLandingPage() {
     });
   }, []);
 
-const filtered = events.filter(e =>
-  (e.title?.toLowerCase().includes(search.toLowerCase()) || 
-   e.description?.toLowerCase().includes(search.toLowerCase())) &&
-  (category ? e.category === category : true) &&
-  (location ? e.location === location : true)
-);
+  const filtered = events.filter(e =>
+    (e.title?.toLowerCase().includes(search.toLowerCase()) || 
+     e.description?.toLowerCase().includes(search.toLowerCase())) &&
+    (category ? e.category === category : true) &&
+    (location ? e.location === location : true)
+  );
 
   const categories = Array.from(new Set(events.map(e => e.category).filter(Boolean)));
   const locations = Array.from(new Set(events.map(e => e.location).filter(Boolean)));
