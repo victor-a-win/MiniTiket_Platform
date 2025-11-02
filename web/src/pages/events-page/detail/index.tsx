@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, FormEvent } from "react";
 import { Event, EventDetail } from "@/interfaces/event.interface";
 import { fetchEventDetails } from "@/lib/api/events";
 import { EventHeader } from "@/components/events/EventHeader";
@@ -12,6 +12,8 @@ import { createTransaction, uploadPaymentProof } from "@/lib/transactions-api";
 import { fetchCustomerTransactions } from "@/lib/customer-api";
 import { transformToEventDetail } from "@/utils/eventTransformer";
 import type { EventDetail as ApiEventDetail } from "@/lib/events-api";
+
+export const dynamic = 'force-dynamic';
 
 export default function EventDetailPage({ id }: { id: string }) {
   const [event, setEvent] = useState<EventDetail | null>(null);
@@ -27,11 +29,17 @@ export default function EventDetailPage({ id }: { id: string }) {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [isClient, setIsClient] = useState(false);
 
   const { token, user } = useAuth();
 
+  // Set client-side flag
   useEffect(() => {
-    if (id && typeof id === "string") {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (isClient && id && typeof id === "string") {
       fetchEventDetails(id)
         .then(eventData => {
           const transformedEvent = transformToEventDetail(eventData);
@@ -42,13 +50,13 @@ export default function EventDetailPage({ id }: { id: string }) {
           setEvent(null);
         });
     }
-  }, [id]);
+  }, [id, isClient]);
 
   useEffect(() => {
-    if (token) {
+    if (isClient && token) {
       loadTransactions();
     }
-  }, [token]);
+  }, [token, isClient]);
 
   const loadTransactions = async () => {
     try {
@@ -63,53 +71,14 @@ export default function EventDetailPage({ id }: { id: string }) {
     }
   };
 
-  const handleCheckout = async () => {
-    if (!token || !selectedTicket) {
-      setError("Please login and select a ticket");
-      return;
-    }
-
-    try {
-      const payload = {
-        eventId: id,
-        ticketTypeId: selectedTicket,
-        qty: quantity,
-        usePoints,
-        promoCode: promoCode || undefined
-      };
-
-      const response = await createTransaction(payload, token);
-      
-      if (response.data.totalPayableIDR === 0) {
-        setSuccess("Free ticket registered successfully!");
-        await loadTransactions();
-      } else {
-        setExistingTx(response.data);
-        setProofModalOpen(true);
-      }
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
-
-  const handleUploadProof = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!proofFile || !existingTx) return;
-
-    setProofUploading(true);
-    setProofError(null);
-
-    try {
-      await uploadPaymentProof(existingTx.id, proofFile, token!);
-      setProofModalOpen(false);
-      setSuccess("Payment proof uploaded successfully!");
-      await loadTransactions();
-    } catch (err: any) {
-      setProofError(err.message);
-    } finally {
-      setProofUploading(false);
-    }
-  };
+  // Show loading state during SSR
+  if (!isClient) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-700 via-pink-600 to-pink-400 p-8 flex items-center justify-center">
+        <div className="text-white text-lg">Loading...</div>
+      </div>
+    );
+  }
 
   if (!event) {
     return (
@@ -119,6 +88,70 @@ export default function EventDetailPage({ id }: { id: string }) {
     );
   }
 
+  const handleUploadProof = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    
+    if (!proofFile || !existingTx) {
+      setProofError("Please select a file and ensure you have a pending transaction");
+      return;
+    }
+
+    setProofUploading(true);
+    setProofError(null);
+
+    try {
+      await uploadPaymentProof(existingTx.id, proofFile, token!);
+      setSuccess("Payment proof uploaded successfully! Please wait for verification.");
+      setProofModalOpen(false);
+      setProofFile(null);
+      
+      // Refresh transactions to get updated status
+      await loadTransactions();
+    } catch (err: any) {
+      console.error("Failed to upload payment proof:", err);
+      setProofError(err.message || "Failed to upload payment proof. Please try again.");
+    } finally {
+      setProofUploading(false);
+    }
+  };
+
+  const handleCheckout = async () => {
+    if (!token || !user) {
+      setError("Please login to continue");
+      return;
+    }
+
+    if (!selectedTicket) {
+      setError("Please select a ticket type");
+      return;
+    }
+
+    try {
+      setError(null);
+      const ticketType = event.ticketTypes.find(t => t.id === selectedTicket);
+      if (!ticketType) {
+        setError("Invalid ticket type selected");
+        return;
+      }
+
+      const transactionData = {
+        eventId: id,
+        ticketTypeId: selectedTicket,
+        qty: quantity,
+        usePoints,
+        promoCode: promoCode || undefined
+      };
+
+      const response = await createTransaction(transactionData, token);
+      setSuccess("Transaction created successfully! Please upload payment proof.");
+      
+      // Refresh transactions to show the new one
+      await loadTransactions();
+    } catch (err: any) {
+      console.error("Failed to create transaction:", err);
+      setError(err.message || "Failed to create transaction. Please try again.");
+    }
+  };
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-700 via-pink-600 to-pink-400 p-4 md:p-8">
         <EventHeader event={{ ...(event as any), organizer: { ...(event as any).organizer, userId: ((event as any).organizer?.userId ?? "") as string } } as ApiEventDetail} />
