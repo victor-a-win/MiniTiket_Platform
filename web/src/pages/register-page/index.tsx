@@ -11,6 +11,9 @@ import { useState } from "react";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import "./register.styles.css";
 
+// Add this to disable static generation
+export const dynamic = 'force-dynamic';
+
 export default function Register() {
   const [showPassword, setShowPassword] = useState({password: false});
   const initialValues: IRegister = {

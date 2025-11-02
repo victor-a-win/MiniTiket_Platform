@@ -9,6 +9,9 @@ import axios from "axios";
 import { ResetPasswordSchema } from '@/schemas/reset-password';
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 
+// Add this to disable static generation
+export const dynamic = 'force-dynamic';
+
 export default function ResetPassword() {
   const router = useRouter();
   const searchParams = useSearchParams();

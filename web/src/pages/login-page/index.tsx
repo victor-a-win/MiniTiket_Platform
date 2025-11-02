@@ -16,12 +16,21 @@ import { useRouter } from "next/navigation";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import "./login.styles.css"
 
+// Add this to disable static generation
+export const dynamic = 'force-dynamic';
+
 export default function Login() {
+  const [isClient, setIsClient] = useState(false);
   const dispatch = useAppDispatch();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showPassword, setShowPassword] = useState({password: false});
   const initialValues: ILogin = { email: "", password: "" };
+
+  // Set client-side flag
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Toggle password visibility
   const togglePasswordVisibility = (field: keyof typeof showPassword) => {
@@ -35,6 +44,8 @@ export default function Login() {
 
   // Check for token in URL on component mount
   useEffect(() => {
+    if (!isClient) return;
+    
     const token = searchParams?.get('token');
     if (token) {
       verifyResetToken(token);
@@ -43,7 +54,7 @@ export default function Login() {
     // Clean up any residual reset state
     localStorage.removeItem('resetToken');
     sessionStorage.removeItem('resetToken');
-  }, [searchParams]);
+  }, [searchParams, isClient]);
 
   const verifyResetToken = async (token: string) => {
     try {
@@ -160,6 +171,15 @@ export default function Login() {
       });
     }
   };
+
+  // Show loading during SSR
+  if (!isClient) {
+    return (
+      <div className="Login-Styles flex flex-col sm:flex-row justify-center items-center sm:justify-evenly sm:items-end sm:gap-3 sm:p-8">
+        <div className="text-center">Loading...</div>
+      </div>
+    );
+  }
   
   return (
     <div className="Login-Styles flex flex-col sm:flex-row justify-center items-center 

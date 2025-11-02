@@ -5,6 +5,9 @@ import EventCard from "@/components/events/EventCard";
 import { Event } from "@/interfaces/event.interface";
 import { fetchEvents } from "@/lib/api/events";
 
+// Add this to disable static generation
+export const dynamic = 'force-dynamic';
+
 export default function EventsLandingPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [search, setSearch] = useState("");

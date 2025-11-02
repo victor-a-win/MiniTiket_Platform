@@ -2,17 +2,25 @@ import { useDispatch, useSelector, useStore } from "react-redux";
 import { AppStore, AppDispatch, RootState } from "./store";
 
 // SSR-safe hooks
-export const useAppDispatch = () => useDispatch<AppDispatch>();
+export const useAppDispatch = () => {
+  if (typeof window === "undefined") {
+    return (() => {}) as any;
+  }
+  return useDispatch<AppDispatch>();
+};
 
 export const useAppSelector = <TSelected>(
   selector: (state: RootState) => TSelected
 ): TSelected => {
-  // Prevent Redux from running during SSR
   if (typeof window === "undefined") {
-    // Return a default value that matches the expected type
     return undefined as TSelected;
   }
   return useSelector(selector);
 };
 
-export const useAppStore = () => useStore<AppStore>();
+export const useAppStore = () => {
+  if (typeof window === "undefined") {
+    return undefined as unknown as AppStore;
+  }
+  return useStore<AppStore>();
+};

@@ -13,6 +13,7 @@ import { fetchCustomerTransactions } from "@/lib/customer-api";
 import { transformToEventDetail } from "@/utils/eventTransformer";
 import type { EventDetail as ApiEventDetail } from "@/lib/events-api";
 
+// Add this to disable static generation
 export const dynamic = 'force-dynamic';
 
 export default function EventDetailPage({ id }: { id: string }) {
