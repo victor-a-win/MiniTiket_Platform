@@ -1,4 +1,3 @@
-// web/src/pages/eo-dashboard-page/index.tsx
 "use client";
 
 import { useAppSelector } from "@/lib/redux/hook";
@@ -16,19 +15,27 @@ export default function EODashboard() {
   const auth = useAppSelector((state) => state.auth);
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
+  const [isClient, setIsClient] = useState(false);
+
+  // Set client-side flag
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
-    if (!auth.isLogin) {
-      router.push('/login');
-    } else if (auth.user?.roleName?.toLowerCase() !== 'event organizer') {
-      router.push('/');
-    } else {
-      setIsLoading(false);
+    if (isClient) {
+      if (!auth.isLogin) {
+        router.push('/login');
+      } else if (auth.user?.roleName?.toLowerCase() !== 'event organizer') {
+        router.push('/');
+      } else {
+        setIsLoading(false);
+      }
     }
-  }, [auth, router]);
+  }, [auth, router, isClient]);
 
-  // Show loading state while checking authentication
-  if (isLoading || !auth.isLogin || auth.user?.roleName?.toLowerCase() !== 'event organizer') {
+  // Show loading state on server and during client-side checks
+  if (!isClient || isLoading || !auth.isLogin || auth.user?.roleName?.toLowerCase() !== 'event organizer') {
     return (
       <div className="flex justify-center items-center h-screen">
         <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-blue-500"></div>
