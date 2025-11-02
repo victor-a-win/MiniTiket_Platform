@@ -11,6 +11,9 @@ import { OrganizerEvent, CreateEventPayload, EventFormModalProps } from "@/inter
 import { PlusIcon, Trash2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
+// Add this to disable static generation for this component
+export const dynamic = 'force-dynamic';
+
 export default function EventFormModal({
   isOpen,
   onClose,

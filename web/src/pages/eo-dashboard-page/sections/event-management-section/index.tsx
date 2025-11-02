@@ -9,6 +9,7 @@ import { PencilIcon, TrashIcon, CalendarDays, MapPin, Users } from "lucide-react
 import { useAuth } from "@/hooks/useAuth";
 import { formatCurrencyIDR } from "@/utils/formatter";
 
+export const dynamic = 'force-dynamic';
 export default function EventManagement() {
   const [events, setEvents] = useState<OrganizerEvent[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<OrganizerEvent | null>(null);

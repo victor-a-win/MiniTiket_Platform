@@ -11,7 +11,7 @@ import AttendeeList from "./sections/attendee-list-section";
 
 import "./eo_dashboard.style.css"
 
-// This disables static generation and SSR
+// Disable static generation for this page and all nested components
 export const dynamic = 'force-dynamic';
 
 export default function EODashboard() {
