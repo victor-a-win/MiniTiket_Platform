@@ -4,10 +4,10 @@ import { useAppSelector } from "@/lib/redux/hook";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import BasicStatistics from "./sections/statistics-section";
-import TransactionManagement from "./sections/transaction-management-section";
-import EventManagement from "./sections/event-management-section";
-import AttendeeList from "./sections/attendee-list-section";
+import BasicStatistics from "@/components/eo-dashboard/statistics-section";
+import TransactionManagement from "@/components/eo-dashboard/transaction-management-section";
+import EventManagement from "@/components/eo-dashboard/event-management-section";
+import AttendeeList from "@/components/eo-dashboard/attendee-list-section";
 
 import "./eo_dashboard.style.css"
 
