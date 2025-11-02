@@ -9,6 +9,9 @@ import { fetchUser, logout } from "@/lib/redux/features/authSlice";
 import { persistor } from "@/lib/redux/store";
 import { IUser } from "@/interfaces/user.interface";
 
+// Add this to disable static generation
+export const dynamic = 'force-dynamic';
+
 export default function Profile() {
     const dispatch = useAppDispatch();
     const { user, status } = useAppSelector((state) => ({
