@@ -31,6 +31,9 @@ interface Transaction {
   }>;
 }
 
+// Add this to disable static generation
+export const dynamic = 'force-dynamic';
+
 export default function TransactionManagement() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
