@@ -10,7 +10,9 @@ export function transformToEventDetail(eventData: Event): EventDetail {
     startAt: eventData.startAt || eventData.start_date,
     endAt: eventData.endAt || eventData.end_date,
     isPaid:
-      eventData.isPaid !== undefined ? eventData.isPaid : eventData.price > 0,
+      eventData.isPaid !== undefined
+        ? eventData.isPaid
+        : (eventData.price ?? 0) > 0,
     capacity: eventData.capacity || eventData.seats || 0,
     seatsAvailable: eventData.seatsAvailable || eventData.seats || 0,
     coverImageUrl: eventData.coverImageUrl || eventData.image_url || null,
