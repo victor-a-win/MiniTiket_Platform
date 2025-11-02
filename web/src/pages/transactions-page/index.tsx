@@ -6,6 +6,9 @@ import { ProofUploadModal } from "@/components/events/ProofUploadModal";
 import { fetchCustomerTransactions } from "@/lib/customer-api";
 import { uploadPaymentProof } from "@/lib/transactions-api";
 
+// Add this to disable static generation
+export const dynamic = 'force-dynamic';
+
 export default function TransactionPage() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [proofModalOpen, setProofModalOpen] = useState(false);
