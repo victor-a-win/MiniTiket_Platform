@@ -5,6 +5,8 @@ import { Event } from '@/interfaces/event.interface';
 import axios from "axios";
 import { useAuth } from '@/hooks/useAuth';
 
+export const dynamic = 'force-dynamic';
+
 interface Attendee {
   id: string;
   quantity: number;
@@ -21,10 +23,18 @@ export default function AttendeeList() {
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isClient, setIsClient] = useState(false);
   const { token } = useAuth();
+
+  // Set client-side flag
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Fetch organizer's events
   useEffect(() => {
+    if (!isClient || !token) return;
+
     const fetchEvents = async () => {
       try {
         const response = await axios.get(
@@ -36,9 +46,8 @@ export default function AttendeeList() {
           }
         );
         
-        console.log('Events API Response:', response.data); // Debug log
+        console.log('Events API Response:', response.data);
         
-        // Handle the response structure properly
         const eventsData = response.data.data || response.data;
         
         if (!Array.isArray(eventsData)) {
@@ -47,7 +56,6 @@ export default function AttendeeList() {
           return;
         }
 
-        // Transform events to match your Event interface
         const transformedEvents: Event[] = eventsData.map((event: any) => ({
           id: event.id,
           name: event.title || event.name || 'Untitled Event',
@@ -63,7 +71,7 @@ export default function AttendeeList() {
           capacity: event.capacity,
           seats: event.seatsAvailable || event.capacity,
           seatsAvailable: event.seatsAvailable,
-          price: 0, // Default value or calculate from ticketTypes
+          price: 0,
           image_url: event.coverImageUrl,
           organizerId: event.organizerId,
           ticketTypes: event.ticketTypes || [],
@@ -79,19 +87,16 @@ export default function AttendeeList() {
       }
     };
     
-    if (token) {
-      fetchEvents();
-    }
-  }, [token]);
+    fetchEvents();
+  }, [token, isClient]);
 
   // Fetch attendees when event is selected
   useEffect(() => {
-    if (!selectedEventId || !token) return;
+    if (!isClient || !selectedEventId || !token) return;
 
     const fetchAttendees = async () => {
       setIsLoading(true);
       try {
-        // First, let's check what transactions exist for this event
         const response = await axios.get(
           `${process.env.NEXT_PUBLIC_BASE_API_URL}/api/transactions/manage`,
           {
@@ -101,15 +106,13 @@ export default function AttendeeList() {
           }
         );
         
-        console.log('Transactions response:', response.data); // Debug log
+        console.log('Transactions response:', response.data);
         
-        // Filter transactions for the selected event and status DONE
         const transactions = response.data.data || response.data || [];
         const eventTransactions = transactions.filter((tx: any) => 
           tx.eventId === selectedEventId && tx.status === 'DONE'
         );
 
-        // Transform to attendee format
         const attendeesData: Attendee[] = eventTransactions.map((tx: any) => ({
           id: tx.id,
           quantity: tx.items?.reduce((sum: number, item: any) => sum + item.qty, 0) || 0,
@@ -131,7 +134,17 @@ export default function AttendeeList() {
       }
     };
     fetchAttendees();
-  }, [selectedEventId, token]);
+  }, [selectedEventId, token, isClient]);
+
+  // Show loading during SSR
+  if (!isClient) {
+    return (
+      <div className="mt-8 p-6 bg-white rounded-lg shadow-md">
+        <h2 className="text-2xl font-semibold mb-4">Attendee List</h2>
+        <div className="text-center py-4">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="mt-8 p-6 bg-white rounded-lg shadow-md">
