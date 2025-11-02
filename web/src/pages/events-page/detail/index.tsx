@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, FormEvent } from "react";
+import { useRouter } from "next/router";
 import { Event, EventDetail } from "@/interfaces/event.interface";
 import { fetchEventDetails } from "@/lib/api/events";
 import { EventHeader } from "@/components/events/EventHeader";
@@ -12,11 +13,19 @@ import { createTransaction, uploadPaymentProof } from "@/lib/transactions-api";
 import { fetchCustomerTransactions } from "@/lib/customer-api";
 import { transformToEventDetail } from "@/utils/eventTransformer";
 import type { EventDetail as ApiEventDetail } from "@/lib/events-api";
+import { GetServerSideProps } from "next";
 
-// Add this to disable static generation
-export const dynamic = 'force-dynamic';
+// This disables static generation for Pages Router
+export const getServerSideProps: GetServerSideProps = async (context) => {
+  return {
+    props: {}, // Will be passed to the page component as props
+  };
+};
 
-export default function EventDetailPage({ id }: { id: string }) {
+export default function EventDetailPage() {
+  const router = useRouter();
+  const { id } = router.query; // Get id from router query
+  
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [selectedTicket, setSelectedTicket] = useState("");
   const [quantity, setQuantity] = useState(1);
@@ -127,6 +136,11 @@ export default function EventDetailPage({ id }: { id: string }) {
       return;
     }
 
+    if (!id || typeof id !== "string") {
+      setError("Invalid event ID");
+      return;
+    }
+
     try {
       setError(null);
       const ticketType = event.ticketTypes.find(t => t.id === selectedTicket);
@@ -153,6 +167,7 @@ export default function EventDetailPage({ id }: { id: string }) {
       setError(err.message || "Failed to create transaction. Please try again.");
     }
   };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-700 via-pink-600 to-pink-400 p-4 md:p-8">
         <EventHeader event={{ ...(event as any), organizer: { ...(event as any).organizer, userId: ((event as any).organizer?.userId ?? "") as string } } as ApiEventDetail} />
@@ -190,7 +205,7 @@ export default function EventDetailPage({ id }: { id: string }) {
         <ReviewsSection
           reviews={event.reviews || []}
           transactions={transactions}
-          eventId={id}
+          eventId={id as string}
           token={token}
           onRefresh={loadTransactions}
         />
