@@ -11,31 +11,26 @@ import AttendeeList from "./sections/attendee-list-section";
 
 import "./eo_dashboard.style.css"
 
+// This disables static generation and SSR
+export const dynamic = 'force-dynamic';
+
 export default function EODashboard() {
   const auth = useAppSelector((state) => state.auth);
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
-  const [isClient, setIsClient] = useState(false);
-
-  // Set client-side flag
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
 
   useEffect(() => {
-    if (isClient) {
-      if (!auth.isLogin) {
-        router.push('/login');
-      } else if (auth.user?.roleName?.toLowerCase() !== 'event organizer') {
-        router.push('/');
-      } else {
-        setIsLoading(false);
-      }
+    // This will only run on client side
+    if (!auth.isLogin) {
+      router.push('/login');
+    } else if (auth.user?.roleName?.toLowerCase() !== 'event organizer') {
+      router.push('/');
+    } else {
+      setIsLoading(false);
     }
-  }, [auth, router, isClient]);
+  }, [auth, router]);
 
-  // Show loading state on server and during client-side checks
-  if (!isClient || isLoading || !auth.isLogin || auth.user?.roleName?.toLowerCase() !== 'event organizer') {
+  if (isLoading || !auth.isLogin || auth.user?.roleName?.toLowerCase() !== 'event organizer') {
     return (
       <div className="flex justify-center items-center h-screen">
         <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-blue-500"></div>
