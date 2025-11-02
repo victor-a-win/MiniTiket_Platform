@@ -9,8 +9,8 @@ import { login } from "@/lib/redux/features/authSlice";
 import { setCookie } from "cookies-next";
 import { useSearchParams } from "next/navigation";
 
-import { LoginSchema } from "./schema";
-import { Ilogin } from "./type";
+import { ILogin } from '@/types/auth';
+import { LoginSchema } from '@/schemas/login';
 import { useRouter } from "next/navigation";
 
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
@@ -21,7 +21,7 @@ export default function Login() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showPassword, setShowPassword] = useState({password: false});
-  const initialValues: Ilogin = { email: "", password: "" };
+  const initialValues: ILogin = { email: "", password: "" };
 
   // Toggle password visibility
   const togglePasswordVisibility = (field: keyof typeof showPassword) => {
@@ -113,7 +113,7 @@ export default function Login() {
     }
   };
 
-  const onLogin = async (values: Ilogin) => {
+  const onLogin = async (values: ILogin) => {
     try {
       const response = await axios.post(
         `${process.env.NEXT_PUBLIC_BASE_API_URL}/auth/login`,
@@ -185,7 +185,7 @@ export default function Login() {
           onLogin(values);
         }}
       >
-        {(props: FormikProps<Ilogin>) => {
+        {(props: FormikProps<ILogin>) => {
           const { isSubmitting, values, handleChange, handleBlur, touched, errors } = props;
 
           return (

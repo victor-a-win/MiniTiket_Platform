@@ -2,7 +2,6 @@ import axios from "axios";
 
 const API_URL = process.env.API_URL || "http://localhost:8000";
 
-// Add export keyword to make these functions available for import
 export const fetchEvents = async (params?: {
   category?: string;
   location?: string;

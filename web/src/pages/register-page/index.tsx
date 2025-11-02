@@ -4,8 +4,8 @@ import Swal from "sweetalert2";
 import { Formik, Form, Field, FormikProps } from "formik";
 import axios from "axios";
 
-import { RegisterSchema } from "./schema";
-import { IRegister } from "./type";
+import { IRegister } from '@/types/auth';
+import { RegisterSchema } from '@/schemas/register'
 import { useState } from "react";
 
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
