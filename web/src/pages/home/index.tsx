@@ -1,5 +1,5 @@
 import React from 'react';
-import { fetchEvents, fetchEventDetails } from './api';
+import { fetchEvents, fetchEventDetails } from '@/api/events';
 
 // Example usage in a React component
 export default function HomePage() {

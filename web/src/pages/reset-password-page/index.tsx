@@ -6,7 +6,7 @@ import Swal from "sweetalert2";
 import { Formik, Form, Field } from "formik";
 import axios from "axios";
 
-import { ResetPasswordSchema } from "./schema";
+import { ResetPasswordSchema } from '@/schemas/reset-password';
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 
 export default function ResetPassword() {
